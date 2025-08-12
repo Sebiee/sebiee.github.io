@@ -15,7 +15,7 @@ PostgreSQL gives you multiple ways to deal with large objects:
 
 When you use the [Large Object facility](https://www.postgresql.org/docs/current/largeobjects.html), your content gets stored in a special manner outside your table, and you receive an ID by which you can retrieve your data. This means that the column in your table that references a LOB will actually only hold an ID.
 
-```SQL
+```sql
 CREATE TABLE documents (
     id SERIAL PRIMARY KEY,
     title VARCHAR(255),
@@ -33,7 +33,7 @@ Your LOB being stored in a central place (a single system table named `pg_largeo
 
 One way to solve this is to use the LO extension and [create a trigger](https://www.postgresql.org/docs/current/lo.html).
 
-```SQL
+```sql
 CREATE EXTENSION IF NOT EXISTS lo;
 
 CREATE TABLE documents (
@@ -56,7 +56,7 @@ Of course, if you do indeed need more references to your large objects, you won'
 When using Hibernate, to benefit from the LOB facility, you must use the `@Lob` annotation. However, if your field is a string and you declare it as such, there is a subtle problem:
 
 
-```Java
+```java
 @Lob
 @Column(name = "content")
 private String content;
@@ -64,7 +64,7 @@ private String content;
 
 You might end up with the following table:
 
-```SQL
+```sql
 CREATE TABLE documents (
   id SERIAL PRIMARY KEY,
   title VARCHAR(255),
@@ -79,7 +79,7 @@ But storing numbers in a `TEXT` column is your smallest problem. While everythin
 
 If you want to test it yourself, use the `-n` parameter for a dry run, and compare the printed number with the total number of LOBs. In my case:
 
-```SQL
+```sql
 SELECT distinct COUNT(*) FROM pg_largeobject;
 >> 1597782
 ```
