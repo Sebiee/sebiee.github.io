@@ -92,3 +92,32 @@ Would remove 1597782 large objects from database "mydb".
 ```
 
 **vacuumlo would have deleted all my LOBs**. Now, that's a wrong and dangerous way to use this facility.
+
+> Bonus: A query adapted from this [useful article ](https://www.percona.com/blog/how-to-remove-an-orphan-large-object-in-postgresql-with-vacuumlo/) that helps you verify you know indeed the number of orphaned lobs, in this specific case when you have oids saved in columns with type `text`. Combining the acquired knowledge with `lo_remove`, you should be able to cleanup your db, if you want to do that before changing the text with an oid.
+{: .prompt-info }
+
+```sql
+with t as (select distinct attrelid::regclass::varchar as table_name,attname as column_name, atttypid::regtype as type from pg_attribute a join pg_class c on a.attrelid=c.oid WHERE a.attnum > 0 AND NOT a.attisdropped
+      AND a.attrelid = c.oid
+      AND a.atttypid::regtype::varchar in ('oid', 'lo','text')
+      AND c.relkind in ('r', 'm')
+      AND c.relnamespace::regnamespace::varchar !~ '^pg_' limit 10),
+t2 as (select string_agg(distinct '         SELECT DISTINCT ' || column_name || '::oid FROM ' || table_name || ' WHERE ' || column_name ||' ~ E''^\\d+$''', E' UNION \n')  as v_sql from t),
+t3 as (select string_agg(distinct '         (SELECT COUNT(*) FROM ' || table_name || ' WHERE ' || column_name ||' ~ E''^\\d+$''', E') + \n')  as v_sql2 from t)
+SELECT E'WITH lob_counts AS (
+  SELECT
+    (SELECT COUNT(*) FROM (
+      SELECT DISTINCT loid
+      FROM pg_largeobject
+      EXCEPT (\n' || v_sql || E'\n      )' ||
+      E') a) AS orphaned_lobs,\n      (\n' || v_sql2 || E')\n      ) AS known_lobs,\n      ' ||
+       '(SELECT COUNT(DISTINCT loid) FROM pg_largeobject) AS real_total_lobs
+)
+SELECT real_total_lobs, orphaned_lobs, known_lobs, (real_total_lobs - orphaned_lobs) AS "real_total_lobs - orphaned_lobs"
+FROM lob_counts;' from t2, t3;
+```
+
+Execute the query from above, and if you see that the columns `known_lobs`, matches the value of the last column (the difference between real and orphaned), I suppose you can safely proceed to `lo_remove`. In my case:
+| real\_total\_lobs | orphaned\_lobs | known\_lobs | real\_total\_lobs - orphaned\_lobs |
+| :--- | :--- | :--- | :--- |
+| 1536175 | 1453972 | 82203 | 82203 |
